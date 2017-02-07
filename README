@@ -1,0 +1,2 @@
+This is a project to compress and uncompress a file with any type.
+I use Huffman tree to implement it in C++.
