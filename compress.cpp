@@ -7,6 +7,9 @@
 #include <vector>
 #include <fstream>
 using namespace std;
+typedef basic_string<unsigned char> ustring;
+#include "HuffmanNode.hpp"
+#include "HuffmanTree.hpp"
 
 const int TOTALLETTER = 2 * 1024 * 1024;
 
@@ -14,8 +17,8 @@ string getFilename(char *filename);
 string getOutFilename(string filename);
 string getCfgFilename(string filename);
 
-vector<string> divideContent(string filename);
-void dealCompress(string content, string ouFilename, string coFilename);
+vector<ustring> divideContent(ifstream &readFile);
+void dealCompress(ustring content, ofstream &writeFile, ofstream &configFile);
 
 
 int main(int argc, char *argv[]) {
@@ -23,41 +26,47 @@ int main(int argc, char *argv[]) {
 
 	string filename = getFilename(argv[1]);
 	string inFilename = argv[1];
-	string ouFilename = getOuFilename(inFilename);
-	string coFilename = getCofilename(filename);
+	string ouFilename = getOutFilename(inFilename);
+	string coFilename = getCfgFilename(filename);
 
-	vector<string> content;
-	content = divideContent(inFilename);
+	ifstream inInFile(inFilename);
+	ofstream outOutFile(ouFilename);
+	ofstream outCfgFile(coFilename);
+
+	vector<ustring> content;
+	content = divideContent(inInFile);
 
 	for (auto oneContent = content.begin(); oneContent != content.end(); ++oneContent) {
-		dealCompress(*oneContent, ouFilename, coFilename);
+		dealCompress(*oneContent, outOutFile, outCfgFile);
 	}
+
+	inInFile.close();
+	outOutFile.close();
+	outCfgFile.close();
 }
 
 string getFilename(char *filename) {
 	istringstream readFile(filename);
 	string inFile;
 	getline(readFile, inFile, '.');
-	readFile.close();
 	return inFile;
 }
 
-string getOuFilename(string filename) {
+string getOutFilename(string filename) {
 	return filename + ".cpd";
 }
 
-string getCoFilename(string filename) {
+string getCfgFilename(string filename) {
 	return filename + ".cfg";
 }
 
-vector<string> divideContent(string filename) {
-	ifstream readFile(filename);
-
+vector<ustring> divideContent(ifstream &readFile) {
 	int pos = 0;
-	string oneContent = "";
-	vector<string> res;
+	ustring oneContent;
+	oneContent.clear();
+	vector<ustring> res;
 	while (!readFile.eof()) {
-		char cur;
+		unsigned char cur;
 		readFile >> cur;
 		oneContent += cur;
 		++pos;
@@ -71,39 +80,46 @@ vector<string> divideContent(string filename) {
 	return res;
 }
 
-void dealCompress(string content, string ouFilename, string coFilename) {
+void dealCompress(ustring content, ofstream &writeFile, ofstream &configFile) {
 	letter record[256];
 	for (int i = 0; i < 256; ++i){
-		record[i] = i;
-		record[i].counter = 0;
+		record[i].initialize(i);
 	}
-
+	
+	int totalCounter = 0;
 	for (auto oneChar = content.begin(); oneChar != content.end(); ++oneChar) {	
 		++record[(int)*oneChar];
+		++totalCounter;
 	}
 
-	HuffmanTree tree(record);
+	HuffmanTree<letter> tree;
+	tree.buildTree(record);
+	ustring decode[256];
+	ustring emptyString; emptyString.clear();
+	tree.getCode(tree.getRoot(), decode, emptyString);
 
-	iofstream configFile(coFilename, ios::end);
-	for (char i = 0; i < 256; ++i) {
-		pair<char, int> cur = make_pair(i, record[i].counter);
-		configFile.write(reinterpret_cast<const char *> (&cur), sizeof(cur));
+	configFile.write(reinterpret_cast<const char *> (&totalCounter), sizeof(totalCounter));
+	for (int i = 0; i < 256; ++i) {
+		configFile.write(reinterpret_cast<const char *> (&record[i]), sizeof(record[i]));
 	}
-	configFile.close();
 
-	iofstream writeFile(ouFilename, ios::end);
-	char curCode = 0;
-	string writeCode = "";
-	pos = 0;
+	unsigned char curCode = 0;
+	ustring writeCode = emptyString;
+	int pos = 0;
 	for (auto oneChar = content.begin(); oneChar != content.end(); ++oneChar) {
-		nxtCode = record[*onechar].code;
-		for (auto oneBit = nxtCode.begin(); oneBit != nxtCode.end(); ++oneBit) {
-			curCode = curCode << 1 | (*oneBit - '0');
+		ustring nxtCode = decode[*oneChar];
+		for (unsigned char oneBit: nxtCode) {
+			curCode = curCode << 1 | int(oneBit - '0');
 			if (++pos == 8) {
 				writeCode = writeCode + curCode;
+				curCode = 0;
 			}
 		}
 	}
-	writeFile << writeCode;
-	writeFile.close();
+	if(pos){
+		curCode <<= (8 - pos);
+		writeCode = writeCode + curCode;
+	}
+	//writeFile << writeCode;
+	writeFile.write(reinterpret_cast<const char*> (&writeCode), sizeof(writeCode));
 }
