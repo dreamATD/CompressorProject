@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <fstream>
+#include <queue>
 using namespace std;
 typedef basic_string<unsigned char> ustring;
 #include "HuffmanNode.hpp"
@@ -65,17 +66,20 @@ vector<ustring> divideContent(ifstream &readFile) {
 	ustring oneContent;
 	oneContent.clear();
 	vector<ustring> res;
-	while (!readFile.eof()) {
-		unsigned char cur;
-		readFile >> cur;
+	unsigned char cur;
+	char ccur;
+	while (readFile.get(ccur)) {
+		cur = ccur;
 		oneContent += cur;
 		++pos;
 
 		if (pos == TOTALLETTER) {
 			pos = 0;
 			res.push_back(oneContent);
+			oneContent.clear();
 		}
 	}
+	if(pos) res.push_back(oneContent);
 
 	return res;
 }
@@ -91,35 +95,33 @@ void dealCompress(ustring content, ofstream &writeFile, ofstream &configFile) {
 		++record[(int)*oneChar];
 		++totalCounter;
 	}
-
+	
 	HuffmanTree<letter> tree;
 	tree.buildTree(record);
-	ustring decode[256];
-	ustring emptyString; emptyString.clear();
-	tree.getCode(tree.getRoot(), decode, emptyString);
+	string decode[256];
+	tree.getCode(tree.getRoot(), decode, "");
 
 	configFile.write(reinterpret_cast<const char *> (&totalCounter), sizeof(totalCounter));
 	for (int i = 0; i < 256; ++i) {
-		configFile.write(reinterpret_cast<const char *> (&record[i]), sizeof(record[i]));
+		configFile.write(reinterpret_cast <const char *> (&record[i]), sizeof(record[i]));
 	}
 
 	unsigned char curCode = 0;
-	ustring writeCode = emptyString;
 	int pos = 0;
 	for (auto oneChar = content.begin(); oneChar != content.end(); ++oneChar) {
-		ustring nxtCode = decode[*oneChar];
-		for (unsigned char oneBit: nxtCode) {
-			curCode = curCode << 1 | int(oneBit - '0');
+		string nxtCode = decode[*oneChar];
+		for (char oneBit: nxtCode) {
+			curCode = curCode << 1 | (oneBit - '0');
 			if (++pos == 8) {
-				writeCode = writeCode + curCode;
+				writeFile << curCode;
+				pos = 0;
 				curCode = 0;
 			}
 		}
 	}
 	if(pos){
 		curCode <<= (8 - pos);
-		writeCode = writeCode + curCode;
+		writeFile << curCode;
 	}
 	//writeFile << writeCode;
-	writeFile.write(reinterpret_cast<const char*> (&writeCode), sizeof(writeCode));
 }
